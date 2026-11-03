@@ -111,6 +111,9 @@ func customNodes() []*Node {
 			if i >= extKeepTCP {
 				break
 			}
+			if t.ms < 99999 {
+				t.n.Ms = t.ms
+			}
 			out = append(out, t.n)
 		}
 		for i, n := range hy1 {

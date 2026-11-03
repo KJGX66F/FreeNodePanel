@@ -351,6 +351,9 @@ func probeIP(ip, port, host string, useTLS bool, sni string, isWS bool, wsHost, 
 		}
 	}
 	ms := int(time.Since(start).Milliseconds())
+	if ms < 1 {
+		ms = 1 // 钳到最小 1ms：0 专用于表示「未测活」，不能和测得的亚毫秒混淆
+	}
 	return &ms
 }
 
@@ -543,6 +546,9 @@ func extNodes() []*Node {
 		if i >= extKeepTCP {
 			break
 		}
+		if t.ms < 99999 {
+			t.n.Ms = t.ms
+		}
 		out = append(out, t.n)
 	}
 	for i, n := range hy1 {
@@ -557,6 +563,24 @@ func extNodes() []*Node {
 		}
 		out = append(out, n)
 	}
+	return out
+}
+
+// sortByLatency 返回按测活延迟排序的副本：测过的节点按延迟从低到高排前面，
+// 未测活的（槽位、Hysteria 系）保持原有相对顺序排后面。只用于订阅输出，
+// 不影响面板明细的按源分组顺序。
+func sortByLatency(nodes []*Node) []*Node {
+	out := append([]*Node{}, nodes...)
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].Ms, out[j].Ms
+		if (a > 0) != (b > 0) {
+			return a > 0
+		}
+		if a > 0 && b > 0 {
+			return a < b
+		}
+		return false
+	})
 	return out
 }
 

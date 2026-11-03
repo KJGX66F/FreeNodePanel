@@ -176,6 +176,7 @@ type Node struct {
 	Name     string
 	V2N      bool   // 能否进 v2rayN 订阅（hysteria v1 不能）
 	Source   string // 展示用来源标签（槽位或外部源）
+	Ms       int    // 测活延迟（毫秒）；0 = 未测活/未知（槽位与 Hysteria 系）
 }
 
 func nodeFromLink(link, name string) *Node {

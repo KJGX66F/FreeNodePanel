@@ -261,6 +261,7 @@ type clashConfig struct {
 }
 
 func buildClashYAML(nodes []*Node) string {
+	nodes = sortByLatency(nodes)
 	var proxies []*clashProxy
 	var names []string
 	taken := map[string]bool{}

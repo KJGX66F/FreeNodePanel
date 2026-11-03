@@ -72,6 +72,7 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func buildSubV2ray() string {
 	nodes, _ := aggregateNodes(true)
+	nodes = sortByLatency(nodes)
 	var links []string
 	for _, n := range nodes {
 		links = append(links, n.Link)
@@ -94,6 +95,7 @@ func serveMain() int {
 		return 1
 	}
 	loadToken()
+	startUpdateChecker()
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -125,10 +127,16 @@ func serveMain() int {
 		sr, er := slotsRefreshing, extRefreshing
 		stateMu.Unlock()
 		total, _ := statusCounts()
-		writeJSON(w, 200, map[string]any{
-			"app": appMark, "version": 12, "sub_url": subURL(),
+		m := map[string]any{
+			"app": appMark, "version": 13, "sub_url": subURL(),
 			"slots_refreshing": sr, "ext_refreshing": er, "total": total,
-		})
+			"release": releaseVersion,
+		}
+		if latest := updateAvailable(); latest != "" {
+			m["update_available"] = latest
+			m["release_url"] = releasesLatest
+		}
+		writeJSON(w, 200, m)
 	})
 
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +216,7 @@ func serveMain() int {
 			items = append(items, map[string]any{
 				"name": n.Name, "protocol": n.Protocol, "server": n.Server,
 				"port": n.Port, "link": n.Link, "v2n": n.V2N, "source": n.Source,
+				"ms": n.Ms,
 			})
 		}
 		writeJSON(w, 200, map[string]any{"total": len(nodes), "v2n_total": v2n, "nodes": items})
@@ -474,13 +483,15 @@ input{padding:9px;border:2px solid #dbe2f0;border-radius:9px}
 <h1>🚀 免费公益节点面板</h1>
 <p class="tip">服务在后台无窗口运行，你只管用这个页面操作。每次双击程序都会自动把全部内置源刷新一遍，本页会自动显示进度，刷新时不用等、可以先干别的。</p>
 <div id="banner"></div>
+<div id="ubanner" style="display:none"></div>
 <div class="card"><h2>订阅地址（v2rayN / Clash / 手机客户端通用，格式自动适配）</h2>
 <code id="sub">{{SUB}}</code>
 <button onclick="cp(currentSub(),this)">复制订阅地址</button>
 <button class="gray" id="eyeBtn" onclick="toggleEye()">👁 显示完整地址</button>
 <button class="gray" onclick="resetKey()">🔑 重置订阅密钥</button>
 <a href="/api/clash.yaml" download><button type="button" class="gray">⬇ 下载 Clash 配置文件</button></a>
-<p class="tip">地址默认打码显示（录屏、截图都不会泄露），点小眼睛才显示完整地址；复制按钮复制的是完整地址。地址带访问密钥，只填你自己的客户端，别外传。点「重置订阅密钥」会生成新地址、旧地址立即作废，客户端里记得换成新地址。电脑关机或后台被停掉时，订阅更新不了，节点还能用缓存顶一阵。Clash Verge 里更新订阅报 502 之类的错时，点上面「⬇ 下载 Clash 配置文件」，在 Verge 订阅页点「新建」选「本地」导入这个文件，节点完全一样。</p></div>
+<a id="clashImport" href="#"><button type="button">⚡ 一键导入 Clash Verge</button></a>
+<p class="tip">地址默认打码显示（录屏、截图都不会泄露），点小眼睛才显示完整地址；复制按钮复制的是完整地址。地址带访问密钥，只填你自己的客户端，别外传。点「重置订阅密钥」会生成新地址、旧地址立即作废，客户端里记得换成新地址。电脑关机或后台被停掉时，订阅更新不了，节点还能用缓存顶一阵。Clash Verge 里更新订阅报 502 之类的错时，点上面「⬇ 下载 Clash 配置文件」，在 Verge 订阅页点「新建」选「本地」导入这个文件，节点完全一样。装了 Clash Verge 的话，也可以直接点「⚡ 一键导入 Clash Verge」自动打开 Verge 导入；点了没反应说明 Verge 没装或没启动，用复制地址手动导入即可。</p></div>
 <div class="card"><h2>节点总览</h2>
 <p id="stats">加载中…</p>
 <button onclick="post('/api/fetch_all')">🔄 刷新免费公益节点池</button>
@@ -523,7 +534,7 @@ let NODES=[], wasBusy=false;
 let SUBFULL='{{SUB}}', eyeOn=false;
 function maskSub(u){let i=u.lastIndexOf('/sub/');return i<0?u:u.slice(0,i+5)+'••••••••••••'}
 function currentSub(){return SUBFULL}
-function showSub(){document.getElementById('sub').innerText=eyeOn?SUBFULL:maskSub(SUBFULL);document.getElementById('eyeBtn').innerText=eyeOn?'🙈 隐藏地址':'👁 显示完整地址'}
+function showSub(){document.getElementById('sub').innerText=eyeOn?SUBFULL:maskSub(SUBFULL);document.getElementById('eyeBtn').innerText=eyeOn?'🙈 隐藏地址':'👁 显示完整地址';document.getElementById('clashImport').href='clash://install-config?url='+encodeURIComponent(SUBFULL)+'&name='+encodeURIComponent('免费公益节点')}
 function toggleEye(){eyeOn=!eyeOn;showSub()}
 function resetKey(){if(!confirm('确定要重置订阅密钥吗？\n旧订阅地址会立即失效，v2rayN / Clash 里需要改填新地址。'))return;fetch('/api/reset_token',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(j=>{if(j.sub_url){SUBFULL=j.sub_url;eyeOn=false;showSub();alert('已生成新订阅地址（已自动打码）。旧地址已作废，记得去客户端把订阅地址换成新的。')}else{alert(j.error||'重置失败')}}).catch(()=>alert('重置失败，请刷新页面重试'))}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -545,12 +556,24 @@ function renderNodes(){
     if(n.source!==lastSrc){html+='<div class="src">'+esc(n.source||'其他')+'</div>';lastSrc=n.source}
     html+='<div class="node"><span class="badge">'+esc(n.protocol)+'</span><span>'+esc(n.name)+'</span>'+
       '<span class="addr">'+esc(n.server)+':'+esc(n.port)+'</span>'+
+      (n.ms?'<span class="addr">⚡'+n.ms+'ms</span>':'')+
       '<span>'+(n.v2n?'v2rayN ✅':'v2rayN ❌（仅 Clash）')+'</span>'+
       (n.link?'<button class="small gray" onclick="cp(NODES['+i+'].link,this)">复制链接</button>':'')+'</div>';
   });
   document.getElementById('nodes').innerHTML = shown? html : '<p class="tip">暂无节点，刷新完成后会自动出现。</p>';
 }
+function refreshUpd(){
+  fetch('/api/tools').then(r=>r.json()).then(j=>{
+    let ub=document.getElementById('ubanner');
+    if(j.update_available && localStorage.getItem('upd_dismissed')!==j.update_available){
+      ub.style.display='block'; ub.className='done';
+      ub.innerHTML='🎉 有新版本 '+esc(j.update_available)+' 可用（你现在是 '+esc(j.release||'')+'），<a href="'+esc(j.release_url)+'" target="_blank">点此去 GitHub 下载新版</a>　<button class="small gray" id="updX">忽略此版本</button>';
+      document.getElementById('updX').onclick=function(){localStorage.setItem('upd_dismissed',j.update_available);ub.style.display='none'};
+    } else { ub.style.display='none' }
+  }).catch(()=>{});
+}
 function refresh(){
+  refreshUpd();
   fetch('/api/status').then(r=>r.json()).then(j=>{
     let parts=[]; for(let k in j.counts){parts.push(k+' '+j.counts[k])}
     document.getElementById('stats').innerHTML='订阅里共 <b>'+j.total+'</b> 个节点（v2rayN 口径）：'+esc(parts.join(' · '));
