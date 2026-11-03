@@ -15,6 +15,9 @@ import (
 const panelPort = 8765
 const appMark = "freenodepanel"
 
+// serviceVersion 服务自检版本：每次发布递增，启动器靠它识别并拒绝复用旧后台
+const serviceVersion = 14
+
 var (
 	tokenMu  sync.RWMutex
 	subToken string
@@ -128,7 +131,7 @@ func serveMain() int {
 		stateMu.Unlock()
 		total, _ := statusCounts()
 		m := map[string]any{
-			"app": appMark, "version": 13, "sub_url": subURL(),
+			"app": appMark, "version": serviceVersion, "sub_url": subURL(),
 			"slots_refreshing": sr, "ext_refreshing": er, "total": total,
 			"release": releaseVersion,
 		}
@@ -137,6 +140,10 @@ func serveMain() int {
 			m["release_url"] = releasesLatest
 		}
 		writeJSON(w, 200, m)
+	})
+
+	mux.HandleFunc("/api/diag", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"text": buildDiagText()})
 	})
 
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
@@ -448,7 +455,7 @@ func serveMain() int {
 	}()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", panelPort)
-	logf("后台服务启动 -> http://%s/sub/%s", addr, currentToken())
+	logf("后台服务启动 -> http://%s/sub/****（密钥不记日志）", addr)
 	srv := &http.Server{Addr: addr, Handler: mux}
 	if err := serveWithTray(srv); err != nil {
 		logf("服务退出：%v", err)
@@ -497,7 +504,9 @@ input{padding:9px;border:2px solid #dbe2f0;border-radius:9px}
 <button onclick="post('/api/fetch_all')">🔄 刷新免费公益节点池</button>
 <button onclick="post('/api/ext_refresh')">🌐 更新外部源并测活</button>
 <button class="gray" onclick="shutdownSvc()">⏹ 退出后台</button>
+<button class="gray" onclick="copyDiag(this)">📋 复制诊断信息</button>
 <p class="tip" id="rstatus"></p>
+<p class="tip">遇到问题时点「📋 复制诊断信息」，把内容粘贴到 GitHub Issue 或发给作者，定位最快（不含订阅地址和密钥）。</p>
 <p class="tip">拉不到源时，可填你正在运行的代理再刷新，如 http://127.0.0.1:10808 或 http://127.0.0.1:7890：</p>
 <input id="px" style="width:60%" placeholder="留空 = 直连+镜像">
 <button class="gray" onclick="saveProxy()">保存代理设置</button>
@@ -541,6 +550,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;',
 function cp(t,btn){navigator.clipboard.writeText(t).then(()=>{let o=btn.innerText;btn.innerText='已复制';setTimeout(()=>btn.innerText=o,1200)})}
 function post(u){fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(()=>setTimeout(refresh,600))}
 function saveProxy(){fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proxy:document.getElementById('px').value})}).then(r=>r.json()).then(j=>alert(j.hint||j.error||'已保存'))}
+function copyDiag(btn){fetch('/api/diag').then(r=>r.json()).then(j=>{cp(j.text,btn)}).catch(()=>alert('获取诊断信息失败，请刷新页面重试'))}
 function shutdownSvc(){if(!confirm('确定要退出后台服务吗？\n退出后订阅暂时无法更新，重新双击「免费公益节点面板.exe」即可再启动。'))return;fetch('/api/shutdown',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(()=>{document.body.innerHTML='<div style="max-width:640px;margin:90px auto;text-align:center"><h2>后台服务已退出</h2><p class="tip">右下角托盘图标会随之消失。想再用时，双击「免费公益节点面板.exe」即可。</p></div>'}).catch(()=>{})}
 function addCustom(){let name=document.getElementById('cusName').value.trim(),u=document.getElementById('cusUrl').value.trim();if(!u){alert('先粘贴订阅链接或列表地址');return}fetch('/api/custom_add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,url:u})}).then(r=>r.json()).then(j=>{if(j.ok){document.getElementById('cusUrl').value='';document.getElementById('cusName').value='';alert(j.hint||'已添加');setTimeout(refresh,800)}else{alert(j.error||'添加失败')}}).catch(()=>alert('添加失败，请重试'))}
 function delCustom(id){if(!confirm('确定删除这个自定义源吗？它贡献的节点会从订阅里消失。'))return;fetch('/api/custom_delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}).then(r=>r.json()).then(j=>{if(j.ok){refresh()}else{alert(j.error||'删除失败')}}).catch(()=>alert('删除失败，请重试'))}

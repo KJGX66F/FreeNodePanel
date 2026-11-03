@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 先看常见问题
+    url: https://github.com/KJGX66F/FreeNodePanel#常见问题
+    about: v2rayN 出现 -1、Clash Verge 更新报 502 等高频问题，README 里已有解答
+  - name: 下载最新版
+    url: https://github.com/KJGX66F/FreeNodePanel/releases
+    about: 很多问题在新版里已经修复，先升级到最新版再试
