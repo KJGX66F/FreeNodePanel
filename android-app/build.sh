@@ -82,15 +82,27 @@ cp build/base.apk build/unsigned.apk
 (cd build && zip -q unsigned.apk lib/arm64-v8a/libfreenodepanel.so)
 
 # 5) 对齐 + 签名
+# 签名钥匙只从环境变量来，绝不进仓库（仓库里没有任何 keystore 文件）：
+#   KEYSTORE_FILE  钥匙文件路径。CI 由 workflow 把 Secrets 里的 base64 解码到
+#                  临时目录后注入；本地缺省指向仓库之外的正式发布钥匙。
+#   KEYSTORE_PASS / KEY_PASS  钥匙库密码 / 钥匙密码（只走环境变量，不落盘不回显）
+#   KEY_ALIAS      别名，缺省 freenodepanel
 echo "== zipalign / apksigner =="
 "$BT/zipalign" -f -p 4 build/unsigned.apk build/aligned.apk
-if [ ! -f debug.keystore ]; then
-    keytool -genkeypair -v -keystore debug.keystore -storepass android -keypass android \
-        -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-        -dname "CN=Android Debug,O=FreeNodePanel,C=CN"
+KEYSTORE_FILE="${KEYSTORE_FILE:-$HOME/workspace/tools/release-keystore/freenodepanel-release.keystore}"
+KEY_ALIAS="${KEY_ALIAS:-freenodepanel}"
+if [ ! -f "$KEYSTORE_FILE" ]; then
+    echo "找不到签名钥匙：$KEYSTORE_FILE" >&2
+    echo "请用 KEYSTORE_FILE 指定发布钥匙路径；CI 需配置 ANDROID_KEYSTORE_BASE64 Secret。" >&2
+    exit 1
+fi
+if [ -z "$KEYSTORE_PASS" ] || [ -z "$KEY_PASS" ]; then
+    echo "缺少签名密码：请通过环境变量 KEYSTORE_PASS / KEY_PASS 提供（CI 走 Secrets）" >&2
+    exit 1
 fi
 "$BT/apksigner" sign \
-    --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
+    --ks "$KEYSTORE_FILE" --ks-pass "pass:$KEYSTORE_PASS" --key-pass "pass:$KEY_PASS" \
+    --ks-key-alias "$KEY_ALIAS" \
     --out build/FreeNodePanel-android.apk \
     build/aligned.apk
 

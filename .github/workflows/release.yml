@@ -54,7 +54,19 @@ jobs:
 
       # runner 自带 Android SDK（ANDROID_HOME 已设），工具链定位全走
       # android-app/build.sh 内的环境变量路径，与本地构建同一脚本。
+      # 签名钥匙只存在于仓库 Secrets：解码到 runner 临时目录，
+      # 密码以环境变量注入 build.sh，全程不落仓库、不回显。
+      - name: Restore signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/freenodepanel-release.keystore"
+
       - name: Build APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/freenodepanel-release.keystore
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: freenodepanel
         run: |
           cd android-app && ./build.sh
           cp build/FreeNodePanel-android.apk ../FreeNodePanel-Android.apk
@@ -86,5 +98,6 @@ jobs:
 
             **安卓版**：下载 `FreeNodePanel-Android.apk` 传到手机点开安装（允许「安装未知应用」），
             打开 App 等节点刷新后，用面板「⚡ 一键导入 FlClash」或复制订阅地址到 v2rayNG 更新订阅。
+            从 v0.1.x 原型版升级的用户请先卸载原型版再装正式版（签名已更换，仅此一次），装好后重新复制一次订阅地址。
 
             本项目免费开源，仅供学习测试，严禁商用。使用方法与注意事项见仓库 README。
