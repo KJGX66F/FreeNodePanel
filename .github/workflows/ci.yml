@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  vet-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Vet (Linux)
+        run: go vet ./...
+
+      - name: Vet (Windows)
+        run: GOOS=windows GOARCH=amd64 go vet ./...
+
+      - name: Build (Linux)
+        run: go build -trimpath -o /tmp/freenodepanel .
+
+      - name: Build (Windows)
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -trimpath -ldflags "-s -w -H windowsgui" -o /tmp/freenodepanel.exe .

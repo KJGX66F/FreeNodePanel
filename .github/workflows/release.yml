@@ -1,0 +1,42 @@
+name: Build & Release (Windows)
+
+# 推送 v* 标签时自动构建 Windows 单文件版并发布到 Releases，
+# 例如：git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = "0"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          go build -trimpath -ldflags "-s -w -H windowsgui" -o "dist/免费公益节点面板.exe" .
+          Copy-Item "停止后台.bat" dist/
+          Copy-Item "使用说明.txt" dist/
+          Compress-Archive -Path dist/* -DestinationPath "FreeNodePanel-Windows.zip"
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: FreeNodePanel-Windows.zip
+          body: |
+            下载 `FreeNodePanel-Windows.zip` 解压，双击 `免费公益节点面板.exe` 即可使用，无需安装。
+            首次运行若被 SmartScreen 拦截，点「更多信息 → 仍要运行」。
+            使用方法与注意事项见仓库 README。
