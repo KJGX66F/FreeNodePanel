@@ -22,6 +22,9 @@ func buildDiagText() string {
 	fmt.Fprintf(&b, "时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "版本：%s（服务版本 %d）\n", releaseVersion, serviceVersion)
 	fmt.Fprintf(&b, "系统：%s/%s\n", runtime.GOOS, runtime.GOARCH)
+	if line := androidDNSDiagLine(); line != "" {
+		fmt.Fprintf(&b, "%s\n", line)
+	}
 	if u := updateAvailable(); u != "" {
 		fmt.Fprintf(&b, "可更新：%s\n", u)
 	}

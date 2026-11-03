@@ -68,6 +68,11 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--serve" {
 		os.Exit(serveMain())
 	}
+	// 安卓壳 App 拉起时只给环境变量、不带参数：设了 FNP_DATA_DIR 就直接进服务模式
+	// （没有桌面启动器，也不需要它——界面由 App 的 WebView 承载）。
+	if os.Getenv("FNP_DATA_DIR") != "" {
+		os.Exit(serveMain())
+	}
 	launcherMain()
 }
 
@@ -80,7 +85,7 @@ func launcherMain() {
 			"检测到旧版面板（有黑色窗口的那个）还在运行，占用着 8765 端口。\n\n请先关掉旧版面板的黑色窗口，再重新双击本程序。")
 		return
 	}
-	if running && tools.Version < 14 {
+	if running && tools.Version < 15 {
 		notifyUser("需要先停掉旧后台",
 			"检测到上一个版本的后台服务还在运行。\n\n请先双击同目录的「停止后台.bat」停掉它，再把这个新 EXE 放到原来的文件夹里（覆盖旧的同名文件，这样原来的订阅地址不变），最后重新双击本程序。")
 		return
@@ -92,7 +97,7 @@ func launcherMain() {
 		}
 		ok := false
 		for i := 0; i < 120; i++ {
-			if t, err := getTools(); err == nil && t.App == appMark && t.Version >= 14 {
+			if t, err := getTools(); err == nil && t.App == appMark && t.Version >= 15 {
 				ok = true
 				break
 			}
@@ -107,5 +112,8 @@ func launcherMain() {
 	postAPI("/api/fetch_all")
 	postAPI("/api/ext_refresh")
 	// 打开操作面板：进度、节点列表、订阅地址都在这个页面里
-	openBrowser(base + "/")
+	// FNP_NO_BROWSER=1 时跳过（安卓壳 App 等无桌面浏览器的环境用它兜底）
+	if os.Getenv("FNP_NO_BROWSER") == "" {
+		openBrowser(base + "/")
+	}
 }

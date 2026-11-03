@@ -7,6 +7,10 @@ cache/
 *.exe
 dist/
 
+# 安卓构建产物（中间文件与 Go 二进制，APK 只走 Release 发布）
+android-app/build/
+android-app/native/
+
 # 杂项
 .DS_Store
 Thumbs.db

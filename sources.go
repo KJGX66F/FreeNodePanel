@@ -39,6 +39,14 @@ func logf(format string, args ...any) {
 }
 
 func initDirs() error {
+	// 安卓壳 App 通过 FNP_DATA_DIR 直接指定数据目录（App 的 files 目录）：
+	// 安卓上可执行文件位于只读的 lib 目录，旁边放不了 data/，必须走这个覆盖。
+	// 桌面版不设这个环境变量，行为与原来完全一致。
+	if d := os.Getenv("FNP_DATA_DIR"); d != "" {
+		dataDir = d
+		cacheDir = filepath.Join(dataDir, "cache")
+		return os.MkdirAll(cacheDir, 0o755)
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return err

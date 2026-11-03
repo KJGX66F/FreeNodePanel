@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,7 +11,7 @@ import (
 )
 
 // releaseVersion 本构建对应的发布版本，与 GitHub Release 标签保持一致
-const releaseVersion = "v1.2.0"
+const releaseVersion = "v1.3.0"
 
 // releasesPage 发布页；releasesLatest 会重定向到最新标签页，
 // 从 Location 解析标签即可，不依赖 api.github.com（国内常不可达）
@@ -105,6 +106,10 @@ func updateAvailable() string {
 
 // startUpdateChecker 后台服务启动后延迟首查，之后每 24 小时查一次
 func startUpdateChecker() {
+	// 安卓构建不查更新：GitHub Release 里是 Windows 版，提示了也没法装
+	if runtime.GOOS == "android" {
+		return
+	}
 	go func() {
 		time.Sleep(30 * time.Second)
 		for {

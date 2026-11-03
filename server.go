@@ -16,7 +16,7 @@ const panelPort = 8765
 const appMark = "freenodepanel"
 
 // serviceVersion 服务自检版本：每次发布递增，启动器靠它识别并拒绝复用旧后台
-const serviceVersion = 14
+const serviceVersion = 15
 
 var (
 	tokenMu  sync.RWMutex
@@ -97,6 +97,7 @@ func serveMain() int {
 		fmt.Println("初始化数据目录失败：", err)
 		return 1
 	}
+	installAndroidDNS() // 安卓模式下先装好 DNS 解析器再做任何拉取/测活；桌面版自动跳过
 	loadToken()
 	startUpdateChecker()
 	mux := http.NewServeMux()
@@ -497,7 +498,7 @@ input{padding:9px;border:2px solid #dbe2f0;border-radius:9px}
 <button class="gray" id="eyeBtn" onclick="toggleEye()">👁 显示完整地址</button>
 <button class="gray" onclick="resetKey()">🔑 重置订阅密钥</button>
 <a href="/api/clash.yaml" download><button type="button" class="gray">⬇ 下载 Clash 配置文件</button></a>
-<a id="clashImport" href="#"><button type="button">⚡ 一键导入 Clash Verge</button></a>
+<a id="clashImport" href="#"><button type="button" id="clashImportBtn">⚡ 一键导入 Clash Verge</button></a>
 <p class="tip">地址默认打码显示（录屏、截图都不会泄露），点小眼睛才显示完整地址；复制按钮复制的是完整地址。地址带访问密钥，只填你自己的客户端，别外传。点「重置订阅密钥」会生成新地址、旧地址立即作废，客户端里记得换成新地址。电脑关机或后台被停掉时，订阅更新不了，节点还能用缓存顶一阵。Clash Verge 里更新订阅报 502 之类的错时，点上面「⬇ 下载 Clash 配置文件」，在 Verge 订阅页点「新建」选「本地」导入这个文件，节点完全一样。装了 Clash Verge 的话，也可以直接点「⚡ 一键导入 Clash Verge」自动打开 Verge 导入；点了没反应说明 Verge 没装或没启动，用复制地址手动导入即可。</p></div>
 <div class="card"><h2>节点总览</h2>
 <p id="stats">加载中…</p>
@@ -541,9 +542,12 @@ input{padding:9px;border:2px solid #dbe2f0;border-radius:9px}
 <script>
 let NODES=[], wasBusy=false;
 let SUBFULL='{{SUB}}', eyeOn=false;
+const IS_ANDROID_APP=navigator.userAgent.indexOf('FreeNodePanel-Android')>=0;
+const IMPORT_SCHEME=IS_ANDROID_APP?'flclash://':'clash://';
+const IMPORT_LABEL=IS_ANDROID_APP?'⚡ 一键导入 FlClash':'⚡ 一键导入 Clash Verge';
 function maskSub(u){let i=u.lastIndexOf('/sub/');return i<0?u:u.slice(0,i+5)+'••••••••••••'}
 function currentSub(){return SUBFULL}
-function showSub(){document.getElementById('sub').innerText=eyeOn?SUBFULL:maskSub(SUBFULL);document.getElementById('eyeBtn').innerText=eyeOn?'🙈 隐藏地址':'👁 显示完整地址';document.getElementById('clashImport').href='clash://install-config?url='+encodeURIComponent(SUBFULL)+'&name='+encodeURIComponent('免费公益节点')}
+function showSub(){document.getElementById('sub').innerText=eyeOn?SUBFULL:maskSub(SUBFULL);document.getElementById('eyeBtn').innerText=eyeOn?'🙈 隐藏地址':'👁 显示完整地址';document.getElementById('clashImport').href=IMPORT_SCHEME+'install-config?url='+encodeURIComponent(SUBFULL)+'&name='+encodeURIComponent('免费公益节点');document.getElementById('clashImportBtn').innerText=IMPORT_LABEL}
 function toggleEye(){eyeOn=!eyeOn;showSub()}
 function resetKey(){if(!confirm('确定要重置订阅密钥吗？\n旧订阅地址会立即失效，v2rayN / Clash 里需要改填新地址。'))return;fetch('/api/reset_token',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(j=>{if(j.sub_url){SUBFULL=j.sub_url;eyeOn=false;showSub();alert('已生成新订阅地址（已自动打码）。旧地址已作废，记得去客户端把订阅地址换成新的。')}else{alert(j.error||'重置失败')}}).catch(()=>alert('重置失败，请刷新页面重试'))}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}

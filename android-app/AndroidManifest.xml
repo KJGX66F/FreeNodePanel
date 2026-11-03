@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="app.freenodepanel"
+    android:versionCode="5"
+    android:versionName="1.3.0">
+
+    <uses-sdk
+        android:minSdkVersion="26"
+        android:targetSdkVersion="34" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 前台服务与它的常驻通知（v0.1.2 保活）；specialUse 类型另需专用权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 电池白名单引导：跳系统「请求忽略电池优化」页需要它 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:extractNativeLibs="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="免费公益节点面板"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 拉起并看护 Go 节点服务的前台服务。类型选 specialUse：它不是在与
+             服务器同步数据（dataSync 在新系统上还有时长上限），而是在本机
+             持续提供一个供其它 App 拉订阅的本地 HTTP 服务，属于「其它类型
+             都不贴合」的用途。 -->
+        <service
+            android:name=".PanelService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs a persistent local HTTP service on 127.0.0.1:8765 that provides the node panel and subscription endpoints for other apps on this device." />
+        </service>
+    </application>
+</manifest>
