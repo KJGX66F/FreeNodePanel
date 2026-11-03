@@ -1,7 +1,9 @@
-name: Build & Release (Windows)
+name: Build & Release
 
-# 推送 v* 标签时自动构建 Windows 单文件版并发布到 Releases，
-# 例如：git tag v1.0.0 && git push origin v1.0.0
+# 推送 v* 标签时自动构建 Windows 版与安卓版，并发布到同一个 Release，
+# 例如：git tag v1.3.0 && git push origin v1.3.0
+# 结构：两个构建 job 各自上传 artifact，最后的 release job 汇总发布；
+# 任一构建失败，release job 不会运行，不会发出缺资产的半成品 Release。
 on:
   push:
     tags:
@@ -31,12 +33,58 @@ jobs:
           Copy-Item "使用说明.txt" dist/
           Compress-Archive -Path dist/* -DestinationPath "FreeNodePanel-Windows.zip"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: FreeNodePanel-Windows.zip
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # runner 自带 Android SDK（ANDROID_HOME 已设），工具链定位全走
+      # android-app/build.sh 内的环境变量路径，与本地构建同一脚本。
+      - name: Build APK
+        run: |
+          cd android-app && ./build.sh
+          cp build/FreeNodePanel-android.apk ../FreeNodePanel-Android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: FreeNodePanel-Android.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: FreeNodePanel-Windows.zip
+          files: |
+            assets/FreeNodePanel-Windows.zip
+            assets/FreeNodePanel-Android.apk
           body: |
-            下载 `FreeNodePanel-Windows.zip` 解压，双击 `免费公益节点面板.exe` 即可使用，无需安装。
+            **Windows 版**：下载 `FreeNodePanel-Windows.zip` 解压，双击 `免费公益节点面板.exe` 即可使用，无需安装。
             首次运行若被 SmartScreen 拦截，点「更多信息 → 仍要运行」。
-            使用方法与注意事项见仓库 README。
+
+            **安卓版**：下载 `FreeNodePanel-Android.apk` 传到手机点开安装（允许「安装未知应用」），
+            打开 App 等节点刷新后，用面板「⚡ 一键导入 FlClash」或复制订阅地址到 v2rayNG 更新订阅。
+
+            本项目免费开源，仅供学习测试，严禁商用。使用方法与注意事项见仓库 README。
