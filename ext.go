@@ -17,34 +17,41 @@ import (
 )
 
 // ---------- 外部公共源（与原版 EXT_SOURCES 完全一致） ----------
+// YAML=true 的源发布的是 Clash 格式订阅，抓到后先经 au1rxx.go 的解析器
+// 翻译成分享链接，再走和其它源相同的提取/测活/保留管线。
 type extSource struct {
 	Key, Label, URL, Mirror, Relay string
+	YAML                           bool
 }
 
 var extSources = []extSource{
 	{"ermaozi", "ermaozi",
 		"https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
 		"https://cdn.jsdelivr.net/gh/ermaozi/get_subscribe@main/subscribe/v2ray.txt",
-		"https://wget.la/https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt"},
+		"https://wget.la/https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt", false},
 	{"cbusifab", "cbusifabcap",
 		"https://raw.githubusercontent.com/cbusifabcap/daily_free_vpn/main/Z.txt",
 		"https://cdn.jsdelivr.net/gh/cbusifabcap/daily_free_vpn@main/Z.txt",
-		"https://wget.la/https://raw.githubusercontent.com/cbusifabcap/daily_free_vpn/main/Z.txt"},
+		"https://wget.la/https://raw.githubusercontent.com/cbusifabcap/daily_free_vpn/main/Z.txt", false},
 	{"leilao", "LeilaoMi真测",
 		"https://raw.githubusercontent.com/LeilaoMi/AutoMergePublicNodes-Optimized/main/output/global.urls",
 		"https://cdn.jsdelivr.net/gh/LeilaoMi/AutoMergePublicNodes-Optimized@main/output/global.urls",
-		"https://wget.la/https://raw.githubusercontent.com/LeilaoMi/AutoMergePublicNodes-Optimized/main/output/global.urls"},
+		"https://wget.la/https://raw.githubusercontent.com/LeilaoMi/AutoMergePublicNodes-Optimized/main/output/global.urls", false},
 	{"aliilapro", "ALIILAPRO",
 		"https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
 		"https://cdn.jsdelivr.net/gh/ALIILAPRO/v2rayNG-Config@main/sub.txt",
-		"https://wget.la/https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt"},
+		"https://wget.la/https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt", false},
+	{"au1rxx", "Au1rxx 节点池",
+		"https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml",
+		"https://cdn.jsdelivr.net/gh/Au1rxx/free-vpn-subscriptions@main/output/clash.yaml",
+		"https://wget.la/https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml", true},
 }
 
 const (
-	extKeepTCP   = 120
-	extKeepHy1   = 20
-	extKeepHy2   = 60
-	extProbeMax  = 800
+	extKeepTCP  = 120
+	extKeepHy1  = 20
+	extKeepHy2  = 60
+	extProbeMax = 800
 )
 
 var extSchemes = map[string]bool{
@@ -95,8 +102,8 @@ func endExt() {
 // ---------- ChromeGo 槽位刷新 ----------
 func refreshSlotsSync() (int, []string) {
 	type job struct {
-		key string
-		def toolDef
+		key  string
+		def  toolDef
 		slot int
 	}
 	var jobs []job
@@ -369,7 +376,18 @@ func refreshExtSource(src extSource) (*extCache, error) {
 	if err != nil {
 		return nil, fmt.Errorf("直连和镜像都没拉下来：%v", err)
 	}
-	links := extractLinks(text)
+	var links []string
+	if src.YAML {
+		// Clash YAML 源：先把 proxies 翻译成分享链接，后面的管线与其它源一致
+		ls, st, perr := parseClashYAMLLinks(text)
+		if perr != nil {
+			return nil, perr
+		}
+		logf("外部源 %s：YAML %s", src.Label, st.summary())
+		links = ls
+	} else {
+		links = extractLinks(text)
+	}
 	seen := map[string]bool{}
 	var tcp, hy1, hy2 []string
 	total := 0

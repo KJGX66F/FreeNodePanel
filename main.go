@@ -85,7 +85,7 @@ func launcherMain() {
 			"检测到旧版面板（有黑色窗口的那个）还在运行，占用着 8765 端口。\n\n请先关掉旧版面板的黑色窗口，再重新双击本程序。")
 		return
 	}
-	if running && tools.Version < 15 {
+	if running && tools.Version < 16 {
 		notifyUser("需要先停掉旧后台",
 			"检测到上一个版本的后台服务还在运行。\n\n请先双击同目录的「停止后台.bat」停掉它，再把这个新 EXE 放到原来的文件夹里（覆盖旧的同名文件，这样原来的订阅地址不变），最后重新双击本程序。")
 		return
@@ -97,7 +97,7 @@ func launcherMain() {
 		}
 		ok := false
 		for i := 0; i < 120; i++ {
-			if t, err := getTools(); err == nil && t.App == appMark && t.Version >= 15 {
+			if t, err := getTools(); err == nil && t.App == appMark && t.Version >= 16 {
 				ok = true
 				break
 			}
