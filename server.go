@@ -16,7 +16,7 @@ const panelPort = 8765
 const appMark = "freenodepanel"
 
 // serviceVersion 服务自检版本：每次发布递增，启动器靠它识别并拒绝复用旧后台
-const serviceVersion = 16
+const serviceVersion = 17
 
 var (
 	tokenMu  sync.RWMutex

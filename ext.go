@@ -26,9 +26,9 @@ type extSource struct {
 
 var extSources = []extSource{
 	{"ermaozi", "ermaozi",
-		"https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
-		"https://cdn.jsdelivr.net/gh/ermaozi/get_subscribe@main/subscribe/v2ray.txt",
-		"https://wget.la/https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt", false},
+		"https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/reachable/v2ray.txt",
+		"https://cdn.jsdelivr.net/gh/ermaozi/get_subscribe@main/subscribe/reachable/v2ray.txt",
+		"https://wget.la/https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/reachable/v2ray.txt", false},
 	{"cbusifab", "cbusifabcap",
 		"https://raw.githubusercontent.com/cbusifabcap/daily_free_vpn/main/Z.txt",
 		"https://cdn.jsdelivr.net/gh/cbusifabcap/daily_free_vpn@main/Z.txt",
@@ -45,6 +45,28 @@ var extSources = []extSource{
 		"https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml",
 		"https://cdn.jsdelivr.net/gh/Au1rxx/free-vpn-subscriptions@main/output/clash.yaml",
 		"https://wget.la/https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml", true},
+	// 以下 5 个是「为墙内用户维护」的精选源（与 FreeNodePick 同一批），按
+	// 来源可信度排列：end-gfw 人工精编 → ChromeGo/EdgeGo 官方池合并 →
+	// FreeNodeBiz 精选 → ripaojiedian → 周润发公益。
+	{"endgfw", "end-gfw",
+		"https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-free",
+		"https://cdn.jsdelivr.net/gh/hello-world-1989/cn-news@main/end-gfw-free",
+		"https://wget.la/https://raw.githubusercontent.com/hello-world-1989/cn-news/main/end-gfw-free", false},
+	{"chromego", "ChromeGo/EdgeGo",
+		"https://raw.githubusercontent.com/Misaka-blog/chromego_merge/main/sub/merged_proxies_new.yaml",
+		"https://cdn.jsdelivr.net/gh/Misaka-blog/chromego_merge@main/sub/merged_proxies_new.yaml",
+		"https://wget.la/https://raw.githubusercontent.com/Misaka-blog/chromego_merge/main/sub/merged_proxies_new.yaml", true},
+	{"freenodebiz", "FreeNodeBiz",
+		"https://freenode.biz/api/featured?format=nsubscribe",
+		"", "", false},
+	{"ripaojiedian", "ripaojiedian",
+		"https://raw.githubusercontent.com/ripaojiedian/freenode/main/sub",
+		"https://cdn.jsdelivr.net/gh/ripaojiedian/freenode@main/sub",
+		"https://wget.la/https://raw.githubusercontent.com/ripaojiedian/freenode/main/sub", false},
+	{"shaoyouvip", "周润发公益",
+		"https://raw.githubusercontent.com/shaoyouvip/free/main/mihomo.yaml",
+		"https://cdn.jsdelivr.net/gh/shaoyouvip/free@main/mihomo.yaml",
+		"https://wget.la/https://raw.githubusercontent.com/shaoyouvip/free/main/mihomo.yaml", true},
 }
 
 const (

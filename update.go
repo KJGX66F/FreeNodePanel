@@ -11,7 +11,7 @@ import (
 )
 
 // releaseVersion 本构建对应的发布版本，与 GitHub Release 标签保持一致
-const releaseVersion = "v1.4.0"
+const releaseVersion = "v1.5.0"
 
 // releasesPage 发布页；releasesLatest 会重定向到最新标签页，
 // 从 Location 解析标签即可，不依赖 api.github.com（国内常不可达）

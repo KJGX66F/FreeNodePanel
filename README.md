@@ -2,7 +2,7 @@
 
 一个为纯小白设计的 Windows / 安卓一键节点工具：**下载、打开、复制订阅**，三步搞定。
 
-它在本地聚合多个公开免费节点源（免费公益节点池 + 5 个外部公共源 + 你自己添加的自定义源），自动测活、去重，生成一份同时兼容 **v2rayN / v2rayNG** 与 **Clash 系（Clash Verge / FlClash / mihomo）** 的订阅。没有任何安装步骤，没有黑窗口，界面就是一个自动打开的本地网页（安卓版直接在 App 里打开）。
+它在本地聚合多个公开免费节点源（免费公益节点池 + 10 个外部公共源 + 你自己添加的自定义源），自动测活、去重，生成一份同时兼容 **v2rayN / v2rayNG** 与 **Clash 系（Clash Verge / FlClash / mihomo）** 的订阅。没有任何安装步骤，没有黑窗口，界面就是一个自动打开的本地网页（安卓版直接在 App 里打开）。
 
 > 📢 **本项目免费开源，仅供学习测试，严禁商用。** 任何收费分发、捆绑销售、集成进营利产品/服务、收费代部署等行为都不被允许，详见 [许可证](LICENSE)。
 
@@ -20,7 +20,7 @@
 - **每次启动自动更新**：内置源全部重新拉取 + 测活；后台运行时每 3 小时再自动刷新一轮
 - **多源聚合**：
   - 免费公益节点池：Xray ×4 / Clash.Meta ×6 / Hysteria v1 ×4 / Hysteria2 ×4，共 18 个槽位（双链路：主站 + 镜像）
-  - 外部公共源 ×5：ermaozi、cbusifabcap、LeilaoMi真测、ALIILAPRO、Au1rxx 节点池（GitHub raw → jsDelivr → 国内镜像三链路自动切换；Au1rxx 是 Clash YAML 订阅，内置解析器翻译成节点后走同一套管线）
+  - 外部公共源 ×10：ermaozi（可达名单）、cbusifabcap、LeilaoMi真测、ALIILAPRO、Au1rxx 节点池、end-gfw、ChromeGo/EdgeGo、FreeNodeBiz、ripaojiedian、周润发公益（GitHub raw → jsDelivr → 国内镜像三链路自动切换；Au1rxx、ChromeGo/EdgeGo、周润发公益是 Clash YAML 订阅，内置解析器翻译成节点后走同一套管线）
   - **自定义源**：面板里粘贴订阅地址或链接列表即可添加，重启不丢失，和内置源走同一套测活合并流程
 - **真握手测活**：TCP 系协议（vmess / vless / trojan / ss）逐个做连接 + TLS 握手（ws 还要求 101 升级成功）才保留；Hysteria 系走 UDP 无法握手测活，按上限收录后交给客户端的自动选择组
 - **一份订阅，两种格式**：按客户端 User-Agent 自动分流——v2rayN 拿到 base64 链接列表，Clash / mihomo 拿到 YAML 配置（已通过 mihomo 官方内核校验）
@@ -109,6 +109,11 @@ cd android-app && ./build.sh
 - **[LeilaoMi/AutoMergePublicNodes-Optimized](https://github.com/LeilaoMi/AutoMergePublicNodes-Optimized)** —— 外部源，每 6 小时用 sing-box 真测 + 国内探针验证，量少质高
 - **[ALIILAPRO/v2rayNG-Config](https://github.com/ALIILAPRO/v2rayNG-Config)** —— 外部源，每日更新的大池，TCP 系存活率最高
 - **[Au1rxx/free-vpn-subscriptions](https://github.com/Au1rxx/free-vpn-subscriptions)** —— 外部源，聚合多来源并经其管线验证后导出的全量池（Clash YAML 格式，本工具内置解析接入）
+- **[hello-world-1989/cn-news](https://github.com/hello-world-1989/cn-news)** —— 外部源 end-gfw，人工精编的保命节点（大翻墙运动）
+- **[Misaka-blog/chromego_merge](https://github.com/Misaka-blog/chromego_merge)** —— 外部源 ChromeGo/EdgeGo，官方池的合并订阅（Clash YAML 格式）
+- **[freenode.biz](https://freenode.biz)** —— 外部源 FreeNodeBiz，精选节点接口
+- **[ripaojiedian/freenode](https://github.com/ripaojiedian/freenode)** —— 外部源，永久免费节点订阅
+- **[shaoyouvip/free](https://github.com/shaoyouvip/free)** —— 外部源周润发公益（Clash YAML 格式）
 
 界面与流程的灵感来自 [AndyWork952/chromego-panel](https://github.com/AndyWork952/chromego-panel)，本项目与其无代码隶属关系。
 
