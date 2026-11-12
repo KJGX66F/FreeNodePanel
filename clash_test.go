@@ -74,3 +74,42 @@ func TestClashYAML_AllSampleNodesConvert(t *testing.T) {
 		t.Errorf("转换后 proxies=%d，期望 %d:\n%s", len(doc.Proxies), len(nodes), y)
 	}
 }
+
+// 回归 #5/#6：mihomo 要求 http-opts.path 是列表；写成字符串时
+// Clash Verge Rev 报 'http-opts.path' is not a slice，整份订阅被拒
+func TestClashYAML_HTTPOptsPathIsList(t *testing.T) {
+	vmessJSON := `{"v":"2","ps":"vmess-http","add":"203.0.113.10","port":"80","id":"11111111-2222-3333-4444-555555555555","aid":"0","net":"http","path":"/vmess-path"}`
+	links := []string{
+		"vmess://" + base64.StdEncoding.EncodeToString([]byte(vmessJSON)),
+		"vless://22222222-3333-4444-5555-666666666666@203.0.113.20:80?type=http&path=%2Fvless-path#vless-http",
+	}
+	var nodes []*Node
+	for _, l := range links {
+		n := nodeFromLink(l, "")
+		if n == nil {
+			t.Fatalf("示例链接解析失败：%s", l)
+		}
+		nodes = append(nodes, n)
+	}
+	y := buildClashYAML(nodes)
+	var doc struct {
+		Proxies []map[string]any `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal([]byte(y), &doc); err != nil {
+		t.Fatalf("生成的 YAML 无法解析：%v", err)
+	}
+	if len(doc.Proxies) != 2 {
+		t.Fatalf("转换后 proxies=%d，期望 2:\n%s", len(doc.Proxies), y)
+	}
+	for _, p := range doc.Proxies {
+		ho, ok := p["http-opts"].(map[string]any)
+		if !ok {
+			t.Errorf("节点 %v 缺少 http-opts:\n%s", p["name"], y)
+			continue
+		}
+		paths, ok := ho["path"].([]any)
+		if !ok || len(paths) != 1 {
+			t.Errorf("节点 %v 的 http-opts.path 不是单元素列表（%T %v），mihomo 会整份拒绝:\n%s", p["name"], ho["path"], ho["path"], y)
+		}
+	}
+}

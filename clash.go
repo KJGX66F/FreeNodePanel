@@ -74,7 +74,12 @@ func linkToClash(link, name string) *clashProxy {
 			p.Network = net
 			opts := map[string]any{}
 			if pa := strOf(j["path"]); pa != "" {
-				opts["path"] = pa
+				// mihomo 要求 http-opts.path 是列表；写成字符串整份订阅会被拒（issue #5/#6）
+				if net == "http" {
+					opts["path"] = []string{pa}
+				} else {
+					opts["path"] = pa
+				}
 			}
 			if net == "ws" {
 				if h := strOf(j["host"]); h != "" {
@@ -120,7 +125,8 @@ func linkToClash(link, name string) *clashProxy {
 			p.WSOpts = map[string]any{"path": q.Get("path")}
 		}
 		if net == "http" && q.Get("path") != "" {
-			p.HTTPOpts = map[string]any{"path": q.Get("path")}
+			// mihomo 要求 http-opts.path 是列表；写成字符串整份订阅会被拒（issue #5/#6）
+			p.HTTPOpts = map[string]any{"path": []string{q.Get("path")}}
 		}
 		return p
 	case "trojan":
