@@ -39,11 +39,49 @@ func loadCustomSources() []customSource {
 }
 
 func saveCustomSources(list []customSource) {
+	// 空列表写 [] 而不是 null：删光最后一个源后文件仍是合法空数组，
+	// loadCustomSources 不用靠 "null" 这种特殊情况也能读回空列表。
+	if list == nil {
+		list = []customSource{}
+	}
 	b, _ := json.Marshal(list)
 	tmp := customFile() + ".tmp"
 	if os.WriteFile(tmp, b, 0o644) == nil {
 		os.Rename(tmp, customFile())
 	}
+}
+
+// deleteCustomSource 按 ID 删一个自定义源：从列表移除、落盘、清掉它的缓存与
+// 错误记录。返回是否真的删掉了（没找到返回 false）。
+// 面板删除按钮和 /api/custom_delete 共用这一份逻辑，别在两处各写一份。
+func deleteCustomSource(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return false
+	}
+	customMu.Lock()
+	defer customMu.Unlock()
+	list := loadCustomSources()
+	kept := make([]customSource, 0, len(list))
+	var removed *customSource
+	for i := range list {
+		if list[i].ID == id {
+			cs := list[i]
+			removed = &cs
+		} else {
+			kept = append(kept, list[i])
+		}
+	}
+	if removed == nil {
+		return false
+	}
+	saveCustomSources(kept)
+	os.Remove(extCachePath(removed.key()))
+	stateMu.Lock()
+	delete(extErrors, removed.key())
+	delete(extAttempt, removed.key())
+	stateMu.Unlock()
+	return true
 }
 
 func (c customSource) key() string { return "cu_" + c.ID }

@@ -92,6 +92,27 @@ cd android-app && ./build.sh
 
 > 说明：正式版 APK 的签名钥匙**不在仓库里**。本地构建请通过环境变量提供（`KEYSTORE_FILE`、`KEYSTORE_PASS`、`KEY_PASS`、`KEY_ALIAS`，见 `build.sh` 注释）；Release 流水线从仓库 Secrets 解码钥匙、在 runner 临时目录里签名，密码全程不回显。这样每次发布构建出的 APK 签名一致，升级时才能直接覆盖安装、不丢订阅数据。
 
+### VPS / 软路由托管（Linux 版）
+
+电脑关机订阅就停更，想让它 24 小时在后台自动抓取，可以跑在 VPS 或软路由上：
+
+```bash
+./build-linux.sh
+# 产物：dist/FreeNodePanel-linux-amd64（x86 VPS）
+#       dist/FreeNodePanel-linux-arm64（树莓派 / ARM 软路由）
+```
+
+```bash
+# 传到服务器上，第一次这样启动（FNP_NO_BROWSER=1 表示不打开浏览器）
+FNP_NO_BROWSER=1 FNP_LISTEN=0.0.0.0:8765 ./FreeNodePanel-linux-amd64
+# 然后在浏览器打开 http://服务器IP:8765/ ，面板和订阅地址里的主机
+# 会自动跟成服务器 IP，不用手动改 127.0.0.1
+```
+
+服务启动时自动全量刷新一遍，之后每 3 小时再刷一遍；想一直跑着，用 systemd 托管（`ExecStart` 里写上面那行启动命令，`Restart=always`）。
+
+> ⚠️ 安全提醒：默认只监听本机（127.0.0.1）是最安全的。`FNP_LISTEN=0.0.0.0:8765` 是为了让局域网/家里的设备能访问面板才开的口子——面板里的删除源、重置密钥、退出后台等操作**没有登录保护**，只有订阅地址本身带密钥。所以：只放在可信内网，或用防火墙/反向代理挡住，**不要直接把 8765 暴露到公网**。
+
 ## 工作原理
 
 - 同一个 EXE 有两种形态：无参数双击 = 启动器（拉起后台、触发全量更新、打开面板后自行退出）；带 `--serve` = 后台服务本体（无窗口、带托盘图标）

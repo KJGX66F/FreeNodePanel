@@ -16,7 +16,7 @@ const panelPort = 8765
 const appMark = "freenodepanel"
 
 // serviceVersion 服务自检版本：每次发布递增，启动器靠它识别并拒绝复用旧后台
-const serviceVersion = 17
+const serviceVersion = 18
 
 var (
 	tokenMu  sync.RWMutex
@@ -65,6 +65,23 @@ func resetToken() string {
 }
 
 func subURL() string { return fmt.Sprintf("http://127.0.0.1:%d/sub/%s", panelPort, currentToken()) }
+
+// listenAddr 服务监听地址。默认只监听本机（127.0.0.1），面板和订阅只
+// 能本机访问，这是最安全的默认。
+// VPS / 软路由托管时设 FNP_LISTEN=0.0.0.0:8765（或具体内网地址）才
+// 对外监听：面板里的订阅地址会自动跟随你打开面板时用的主机名，
+// 不用手动改地址。注意：面板的操作接口（删除源、重置密钥、退出等）
+// 没有登录保护，对外监听务必只放在可信内网，或用防火墙/反代挡住，
+// 不要直接暴露到公网。
+func listenAddr() string {
+	if a := strings.TrimSpace(os.Getenv("FNP_LISTEN")); a != "" {
+		if !strings.Contains(a, ":") {
+			a += fmt.Sprintf(":%d", panelPort)
+		}
+		return a
+	}
+	return fmt.Sprintf("127.0.0.1:%d", panelPort)
+}
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	b, _ := json.Marshal(v)
@@ -152,10 +169,12 @@ func serveMain() int {
 		stateMu.Lock()
 		sr, er := slotsRefreshing, extRefreshing
 		se := slotsErrors
+		sp, ep := slotsProgress, extProgress
 		stateMu.Unlock()
 		writeJSON(w, 200, map[string]any{
 			"app": appMark, "total": total, "counts": counts,
 			"slots_refreshing": sr, "ext_refreshing": er, "slots_errors": se,
+			"slots_progress": progressJSON(sp), "ext_progress": progressJSON(ep),
 		})
 	})
 
@@ -317,28 +336,7 @@ func serveMain() int {
 		}
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
-		id := strings.TrimSpace(strOf(body["id"]))
-		customMu.Lock()
-		list := loadCustomSources()
-		var kept []customSource
-		var removed *customSource
-		for i := range list {
-			if list[i].ID == id {
-				cs := list[i]
-				removed = &cs
-			} else {
-				kept = append(kept, list[i])
-			}
-		}
-		if removed != nil {
-			saveCustomSources(kept)
-			os.Remove(extCachePath(removed.key()))
-			stateMu.Lock()
-			delete(extErrors, removed.key())
-			stateMu.Unlock()
-		}
-		customMu.Unlock()
-		if removed == nil {
+		if !deleteCustomSource(strOf(body["id"])) {
 			writeJSON(w, 200, map[string]any{"ok": false, "error": "没找到这个源"})
 			return
 		}
@@ -455,7 +453,7 @@ func serveMain() int {
 		logf("启动自动刷新完成")
 	}()
 
-	addr := fmt.Sprintf("127.0.0.1:%d", panelPort)
+	addr := listenAddr()
 	logf("后台服务启动 -> http://%s/sub/****（密钥不记日志）", addr)
 	srv := &http.Server{Addr: addr, Handler: mux}
 	if err := serveWithTray(srv); err != nil {
@@ -491,12 +489,13 @@ input{padding:9px;border:2px solid #dbe2f0;border-radius:9px}
 <h1>🚀 免费公益节点面板</h1>
 <p class="tip">服务在后台无窗口运行，你只管用这个页面操作。每次双击程序都会自动把全部内置源刷新一遍，本页会自动显示进度，刷新时不用等、可以先干别的。</p>
 <div id="banner"></div>
+<div id="toast" style="display:none;border-radius:12px;padding:12px 16px;margin-top:14px;font-weight:700;background:#172033;color:#fff"></div>
 <div id="ubanner" style="display:none"></div>
 <div class="card"><h2>订阅地址（v2rayN / Clash / 手机客户端通用，格式自动适配）</h2>
 <code id="sub">{{SUB}}</code>
 <button onclick="cp(currentSub(),this)">复制订阅地址</button>
 <button class="gray" id="eyeBtn" onclick="toggleEye()">👁 显示完整地址</button>
-<button class="gray" onclick="resetKey()">🔑 重置订阅密钥</button>
+<button class="gray" onclick="resetKey(this)">🔑 重置订阅密钥</button>
 <a href="/api/clash.yaml" download><button type="button" class="gray">⬇ 下载 Clash 配置文件</button></a>
 <a id="clashImport" href="#"><button type="button" id="clashImportBtn">⚡ 一键导入 Clash Verge</button></a>
 <p class="tip">地址默认打码显示（录屏、截图都不会泄露），点小眼睛才显示完整地址；复制按钮复制的是完整地址。地址带访问密钥，只填你自己的客户端，别外传。点「重置订阅密钥」会生成新地址、旧地址立即作废，客户端里记得换成新地址。电脑关机或后台被停掉时，订阅更新不了，节点还能用缓存顶一阵。Clash Verge 里更新订阅报 502 之类的错时，点上面「⬇ 下载 Clash 配置文件」，在 Verge 订阅页点「新建」选「本地」导入这个文件，节点完全一样。装了 Clash Verge 的话，也可以直接点「⚡ 一键导入 Clash Verge」自动打开 Verge 导入；点了没反应说明 Verge 没装或没启动，用复制地址手动导入即可。</p></div>
@@ -504,7 +503,7 @@ input{padding:9px;border:2px solid #dbe2f0;border-radius:9px}
 <p id="stats">加载中…</p>
 <button onclick="post('/api/fetch_all')">🔄 刷新免费公益节点池</button>
 <button onclick="post('/api/ext_refresh')">🌐 更新外部源并测活</button>
-<button class="gray" onclick="shutdownSvc()">⏹ 退出后台</button>
+<button class="gray" onclick="shutdownSvc(this)">⏹ 退出后台</button>
 <button class="gray" onclick="copyDiag(this)">📋 复制诊断信息</button>
 <p class="tip" id="rstatus"></p>
 <p class="tip">遇到问题时点「📋 复制诊断信息」，把内容粘贴到 GitHub Issue 或发给作者，定位最快（不含订阅地址和密钥）。</p>
@@ -546,18 +545,32 @@ const IS_ANDROID_APP=navigator.userAgent.indexOf('FreeNodePanel-Android')>=0;
 const IMPORT_SCHEME=IS_ANDROID_APP?'flclash://':'clash://';
 const IMPORT_LABEL=IS_ANDROID_APP?'⚡ 一键导入 FlClash':'⚡ 一键导入 Clash Verge';
 function maskSub(u){let i=u.lastIndexOf('/sub/');return i<0?u:u.slice(0,i+5)+'••••••••••••'}
-function currentSub(){return SUBFULL}
-function showSub(){document.getElementById('sub').innerText=eyeOn?SUBFULL:maskSub(SUBFULL);document.getElementById('eyeBtn').innerText=eyeOn?'🙈 隐藏地址':'👁 显示完整地址';document.getElementById('clashImport').href=IMPORT_SCHEME+'install-config?url='+encodeURIComponent(SUBFULL)+'&name='+encodeURIComponent('免费公益节点');document.getElementById('clashImportBtn').innerText=IMPORT_LABEL}
+function currentSub(){
+  // VPS/软路由上用服务器地址打开面板时，订阅地址里的主机也要跟过去，
+  // 不然复制到的还是 127.0.0.1，别的设备用不了。本机打开时原样不动。
+  let h=location.hostname;
+  if(h && h!=='127.0.0.1' && h!=='localhost') return SUBFULL.replace('127.0.0.1', h);
+  return SUBFULL;
+}
+// showMsg：页内提示条，代替 alert()。安卓 WebView 没配 WebChromeClient
+// 时 alert() 是静默的（点了没反应），页内提示条在所有端都可见。
+let msgTimer=null;
+function showMsg(t){let m=document.getElementById('toast');if(!m)return;m.style.display='block';m.innerText=t;clearTimeout(msgTimer);msgTimer=setTimeout(function(){m.style.display='none'},5000)}
+// armBtn：两步确认，代替 confirm()。安卓 WebView 没配 WebChromeClient
+// 时 confirm() 直接返回 false，点了删除/重置/退出会「没有任何反应」
+// （issue #12 的根因）。点一下按钮变「再点一次确认…」，4 秒内再点才执行。
+function armBtn(btn,txt,fn){if(!btn){fn();return}if(btn.dataset.armed){delete btn.dataset.armed;btn.innerText=btn.dataset.orig||btn.innerText;fn();return}btn.dataset.armed='1';btn.dataset.orig=btn.innerText;btn.innerText=txt;setTimeout(function(){if(btn.dataset.armed){delete btn.dataset.armed;btn.innerText=btn.dataset.orig}},4000)}
+function showSub(){document.getElementById('sub').innerText=eyeOn?currentSub():maskSub(currentSub());document.getElementById('eyeBtn').innerText=eyeOn?'🙈 隐藏地址':'👁 显示完整地址';document.getElementById('clashImport').href=IMPORT_SCHEME+'install-config?url='+encodeURIComponent(currentSub())+'&name='+encodeURIComponent('免费公益节点');document.getElementById('clashImportBtn').innerText=IMPORT_LABEL}
 function toggleEye(){eyeOn=!eyeOn;showSub()}
-function resetKey(){if(!confirm('确定要重置订阅密钥吗？\n旧订阅地址会立即失效，v2rayN / Clash 里需要改填新地址。'))return;fetch('/api/reset_token',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(j=>{if(j.sub_url){SUBFULL=j.sub_url;eyeOn=false;showSub();alert('已生成新订阅地址（已自动打码）。旧地址已作废，记得去客户端把订阅地址换成新的。')}else{alert(j.error||'重置失败')}}).catch(()=>alert('重置失败，请刷新页面重试'))}
+function resetKey(btn){armBtn(btn,'再点一次确认重置',function(){fetch('/api/reset_token',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(j=>{if(j.sub_url){SUBFULL=j.sub_url;eyeOn=false;showSub();showMsg('已生成新订阅地址（已自动打码）。旧地址已作废，记得去客户端把订阅地址换成新的。')}else{showMsg(j.error||'重置失败')}}).catch(()=>showMsg('重置失败，请刷新页面重试'))})}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function cp(t,btn){navigator.clipboard.writeText(t).then(()=>{let o=btn.innerText;btn.innerText='已复制';setTimeout(()=>btn.innerText=o,1200)})}
 function post(u){fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(()=>setTimeout(refresh,600))}
-function saveProxy(){fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proxy:document.getElementById('px').value})}).then(r=>r.json()).then(j=>alert(j.hint||j.error||'已保存'))}
-function copyDiag(btn){fetch('/api/diag').then(r=>r.json()).then(j=>{cp(j.text,btn)}).catch(()=>alert('获取诊断信息失败，请刷新页面重试'))}
-function shutdownSvc(){if(!confirm('确定要退出后台服务吗？\n退出后订阅暂时无法更新，重新双击「免费公益节点面板.exe」即可再启动。'))return;fetch('/api/shutdown',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(()=>{document.body.innerHTML='<div style="max-width:640px;margin:90px auto;text-align:center"><h2>后台服务已退出</h2><p class="tip">右下角托盘图标会随之消失。想再用时，双击「免费公益节点面板.exe」即可。</p></div>'}).catch(()=>{})}
-function addCustom(){let name=document.getElementById('cusName').value.trim(),u=document.getElementById('cusUrl').value.trim();if(!u){alert('先粘贴订阅链接或列表地址');return}fetch('/api/custom_add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,url:u})}).then(r=>r.json()).then(j=>{if(j.ok){document.getElementById('cusUrl').value='';document.getElementById('cusName').value='';alert(j.hint||'已添加');setTimeout(refresh,800)}else{alert(j.error||'添加失败')}}).catch(()=>alert('添加失败，请重试'))}
-function delCustom(id){if(!confirm('确定删除这个自定义源吗？它贡献的节点会从订阅里消失。'))return;fetch('/api/custom_delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}).then(r=>r.json()).then(j=>{if(j.ok){refresh()}else{alert(j.error||'删除失败')}}).catch(()=>alert('删除失败，请重试'))}
+function saveProxy(){fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proxy:document.getElementById('px').value})}).then(r=>r.json()).then(j=>showMsg(j.hint||j.error||'已保存'))}
+function copyDiag(btn){fetch('/api/diag').then(r=>r.json()).then(j=>{cp(j.text,btn)}).catch(()=>showMsg('获取诊断信息失败，请刷新页面重试'))}
+function shutdownSvc(btn){armBtn(btn,'再点一次确认退出',function(){fetch('/api/shutdown',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(()=>{document.body.innerHTML='<div style="max-width:640px;margin:90px auto;text-align:center"><h2>后台服务已退出</h2><p class="tip">右下角托盘图标会随之消失。想再用时，双击「免费公益节点面板.exe」即可。</p></div>'}).catch(()=>{})})}
+function addCustom(){let name=document.getElementById('cusName').value.trim(),u=document.getElementById('cusUrl').value.trim();if(!u){showMsg('先粘贴订阅链接或列表地址');return}fetch('/api/custom_add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,url:u})}).then(r=>r.json()).then(j=>{if(j.ok){document.getElementById('cusUrl').value='';document.getElementById('cusName').value='';showMsg(j.hint||'已添加');setTimeout(refresh,800)}else{showMsg(j.error||'添加失败')}}).catch(()=>showMsg('添加失败，请重试'))}
+function delCustom(id,btn){armBtn(btn,'确认删除？',function(){fetch('/api/custom_delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}).then(r=>r.json()).then(j=>{if(j.ok){refresh()}else{showMsg(j.error||'删除失败')}}).catch(()=>showMsg('删除失败，请重试'))})}
 let nodesOpen=false, lastNodesTotal=0;
 function toggleNodes(){nodesOpen=!nodesOpen;document.getElementById('nodesWrap').style.display=nodesOpen?'block':'none';updNodesBtn()}
 function updNodesBtn(){let b=document.getElementById('nodesBtn');if(nodesOpen){b.innerText='收起'}else{b.innerText='展开查看'+(lastNodesTotal>0?'（共 '+lastNodesTotal+' 条）':'')}}
@@ -592,8 +605,13 @@ function refresh(){
     let parts=[]; for(let k in j.counts){parts.push(k+' '+j.counts[k])}
     document.getElementById('stats').innerHTML='订阅里共 <b>'+j.total+'</b> 个节点（v2rayN 口径）：'+esc(parts.join(' · '));
     let busy=j.slots_refreshing||j.ext_refreshing, b=document.getElementById('banner');
-    document.getElementById('rstatus').innerText=(j.slots_refreshing?'免费公益节点池刷新中… ':'')+(j.ext_refreshing?'外部源测活中（约 1-2 分钟）…':'');
-    if(busy){b.className='busy';b.innerText='⏳ 正在后台更新节点，完成后本页会自动刷新列表，你可以先去用已有的节点。';wasBusy=true}
+    // #11 刷新进度：每路显示「已完成/总数 · 百分比（当前在刷哪一路）」
+    let prog=function(p){return p&&p.total? p.done+'/'+p.total+' · '+p.percent+'%'+(p.current?'（'+p.current+'）':''):''};
+    let parts=[];
+    if(j.slots_refreshing) parts.push('节点池 '+prog(j.slots_progress));
+    if(j.ext_refreshing) parts.push('外部源 '+prog(j.ext_progress)+'（约 1-2 分钟）');
+    document.getElementById('rstatus').innerText=parts.length?parts.join('；')+' 刷新中…':'';
+    if(busy){b.className='busy';b.innerText='⏳ 正在后台更新节点 '+parts.join('；')+'，完成后本页会自动刷新列表，你可以先去用已有的节点。';wasBusy=true}
     else if(wasBusy){b.className='done';b.innerText='✅ 更新完成：现在订阅里共 '+j.total+' 个节点，去客户端点一下「更新订阅」就能用上。';wasBusy=false}
     else{b.className='';b.style.display='none'}
   }).catch(()=>{});
@@ -608,7 +626,7 @@ function refresh(){
     };
     document.getElementById('extlist').innerHTML=j.ext.filter(e=>!e.custom).map(e=>'<div class="ext">'+row(e)+'</div>').join('');
     let cus=j.ext.filter(e=>e.custom);
-    document.getElementById('cuslist').innerHTML=cus.length?cus.map(e=>'<div class="ext">'+row(e)+' <button class="small gray" onclick="delCustom(\''+e.id+'\')">删除</button><br><span class="addr">'+esc(e.url)+'</span></div>').join(''):'<p class="tip">还没有添加自定义源，在下面粘贴地址添加。</p>';
+    document.getElementById('cuslist').innerHTML=cus.length?cus.map(e=>'<div class="ext">'+row(e)+' <button class="small gray" onclick="delCustom(\''+e.id+'\',this)">删除</button><br><span class="addr">'+esc(e.url)+'</span></div>').join(''):'<p class="tip">还没有添加自定义源，在下面粘贴地址添加。</p>';
   }).catch(()=>{});
   fetch('/api/nodes').then(r=>r.json()).then(j=>{NODES=j.nodes||[];lastNodesTotal=j.total||0;renderNodes();updNodesBtn()}).catch(()=>{});
 }

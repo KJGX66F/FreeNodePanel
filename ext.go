@@ -89,7 +89,39 @@ var (
 	extRefreshing   bool
 	extErrors       = map[string]string{}
 	extAttempt      = map[string]time.Time{}
+	// 刷新进度（#11）：面板轮询 /api/status 时显示百分比用。
+	// slotsProgress 是节点池槽位刷新，extProgress 是外部源刷新，
+	// 各自记录总数 / 已完成数 / 当前正在处理的那一路。
+	slotsProgress refreshProgress
+	extProgress   refreshProgress
 )
+
+// refreshProgress 一路刷新的进度：总数、已完成数、当前在处理谁
+type refreshProgress struct {
+	Total   int    `json:"total"`
+	Done    int    `json:"done"`
+	Current string `json:"current"`
+}
+
+// progressPct 已完成百分比（总数为 0 时返回 0，不会除零）
+func progressPct(done, total int) int {
+	if total <= 0 {
+		return 0
+	}
+	p := done * 100 / total
+	if p > 100 {
+		p = 100
+	}
+	return p
+}
+
+// progressJSON 把进度包成 /api/status 里给面板的字段
+func progressJSON(p refreshProgress) map[string]any {
+	return map[string]any{
+		"total": p.Total, "done": p.Done, "current": p.Current,
+		"percent": progressPct(p.Done, p.Total),
+	}
+}
 
 func tryStartSlots() bool {
 	stateMu.Lock()
@@ -135,6 +167,9 @@ func refreshSlotsSync() (int, []string) {
 		}
 	}
 	errs := make([]string, len(jobs))
+	stateMu.Lock()
+	slotsProgress = refreshProgress{Total: len(jobs)}
+	stateMu.Unlock()
 	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
 	for i, jb := range jobs {
@@ -144,6 +179,10 @@ func refreshSlotsSync() (int, []string) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			text, err := fetchSlot(jb.def, jb.slot)
+			stateMu.Lock()
+			slotsProgress.Done++
+			slotsProgress.Current = jb.def.Label
+			stateMu.Unlock()
 			if err != nil {
 				errs[i] = fmt.Sprintf("%s 源%d", jb.def.Label, jb.slot)
 				return
@@ -519,8 +558,12 @@ func refreshExtSource(src extSource) (*extCache, error) {
 }
 
 func refreshExtAllSync() {
+	srcs := allExtLikeSources()
+	stateMu.Lock()
+	extProgress = refreshProgress{Total: len(srcs)}
+	stateMu.Unlock()
 	var wg sync.WaitGroup
-	for _, src := range allExtLikeSources() {
+	for _, src := range srcs {
 		wg.Add(1)
 		go func(src extSource) {
 			defer wg.Done()
@@ -529,6 +572,8 @@ func refreshExtAllSync() {
 			stateMu.Unlock()
 			_, err := refreshExtSource(src)
 			stateMu.Lock()
+			extProgress.Done++
+			extProgress.Current = src.Label
 			if err != nil {
 				extErrors[src.Key] = err.Error()
 				logf("外部源 %s 刷新失败：%v", src.Label, err)
