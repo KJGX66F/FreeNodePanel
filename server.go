@@ -16,7 +16,7 @@ const panelPort = 8765
 const appMark = "freenodepanel"
 
 // serviceVersion 服务自检版本：每次发布递增，启动器靠它识别并拒绝复用旧后台
-const serviceVersion = 18
+const serviceVersion = 19
 
 var (
 	tokenMu  sync.RWMutex
@@ -607,11 +607,11 @@ function refresh(){
     let busy=j.slots_refreshing||j.ext_refreshing, b=document.getElementById('banner');
     // #11 刷新进度：每路显示「已完成/总数 · 百分比（当前在刷哪一路）」
     let prog=function(p){return p&&p.total? p.done+'/'+p.total+' · '+p.percent+'%'+(p.current?'（'+p.current+'）':''):''};
-    let parts=[];
-    if(j.slots_refreshing) parts.push('节点池 '+prog(j.slots_progress));
-    if(j.ext_refreshing) parts.push('外部源 '+prog(j.ext_progress)+'（约 1-2 分钟）');
-    document.getElementById('rstatus').innerText=parts.length?parts.join('；')+' 刷新中…':'';
-    if(busy){b.className='busy';b.innerText='⏳ 正在后台更新节点 '+parts.join('；')+'，完成后本页会自动刷新列表，你可以先去用已有的节点。';wasBusy=true}
+    let progParts=[];
+    if(j.slots_refreshing) progParts.push('节点池 '+prog(j.slots_progress));
+    if(j.ext_refreshing) progParts.push('外部源 '+prog(j.ext_progress)+'（约 1-2 分钟）');
+    document.getElementById('rstatus').innerText=progParts.length?progParts.join('；')+' 刷新中…':'';
+    if(busy){b.className='busy';b.innerText='⏳ 正在后台更新节点 '+progParts.join('；')+'，完成后本页会自动刷新列表，你可以先去用已有的节点。';wasBusy=true}
     else if(wasBusy){b.className='done';b.innerText='✅ 更新完成：现在订阅里共 '+j.total+' 个节点，去客户端点一下「更新订阅」就能用上。';wasBusy=false}
     else{b.className='';b.style.display='none'}
   }).catch(()=>{});
